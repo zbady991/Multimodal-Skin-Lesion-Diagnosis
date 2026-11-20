@@ -1,0 +1,22 @@
+{
+    "model": "tabular_only",
+    "epochs": 10,
+    "batch_size": 4,
+    "image_lr": 1e-05,
+    "head_lr": 0.0001,
+    "weight_decay": 0.01,
+    "random_seed": 42,
+    "num_workers": 0,
+    "amp": true,
+    "device": "cuda",
+    "class_to_index": {
+        "akiec": 0,
+        "bcc": 1,
+        "bkl": 2,
+        "df": 3,
+        "mel": 4,
+        "nv": 5,
+        "vasc": 6
+    },
+    "notes": "Same tabular MLP as the multimodal model. No image branch. Head input size is 64 instead of 2048+64."
+}

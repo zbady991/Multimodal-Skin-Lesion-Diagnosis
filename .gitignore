@@ -1,0 +1,17 @@
+# Environment
+.venv/
+venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.vscode/
+
+# Raw data (download instructions are in README)
+data/raw/
+
+# Large model files (shared via drive link in README)
+*.pth
+*.pt
+*.joblib
+!data/processed/tabular_preprocessor.joblib
+checkpoints/

@@ -1,0 +1,30 @@
+{
+    "model": "ViT-B/16",
+    "pretrained": true,
+    "num_classes": 7,
+    "class_names": [
+        "akiec",
+        "bcc",
+        "bkl",
+        "df",
+        "mel",
+        "nv",
+        "vasc"
+    ],
+    "seed": 42,
+    "epochs": 15,
+    "batch_size": 2,
+    "accumulation_steps": 4,
+    "effective_batch_size": 8,
+    "learning_rate": 1e-05,
+    "weight_decay": 0.01,
+    "dropout": 0.1,
+    "image_size": 224,
+    "optimizer": "AdamW",
+    "scheduler": "ReduceLROnPlateau",
+    "loss": "Weighted CrossEntropyLoss",
+    "mixed_precision": true,
+    "train_csv": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\data\\processed\\train_processed.csv",
+    "validation_csv": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\data\\processed\\validation_processed.csv",
+    "selection_metric": "validation_macro_f1"
+}

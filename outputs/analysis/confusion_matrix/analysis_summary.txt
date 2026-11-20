@@ -1,0 +1,91 @@
+MULTIMODAL CONFUSION-MATRIX ANALYSIS (VALIDATION)
+======================================================================
+
+Validation results were used for model selection. They may be discussed in the context of training.
+
+Samples: 1532. Correct: 1284. Errors: 248. Overall error rate: 0.1619.
+
+Saved overall metrics (not recomputed from predictions):
+  accuracy: 0.8381
+  macro_f1: 0.7265
+  weighted_f1: 0.8406
+  balanced_accuracy: 0.7421
+
+Per-class errors
+----------------------------------------------------------------------
+df      support=  24  errors=  10  error_rate=0.4167  recall=0.5833  precision=0.7000
+mel     support= 173  errors=  57  error_rate=0.3295  recall=0.6705  precision=0.6444
+akiec   support=  53  errors=  17  error_rate=0.3208  recall=0.6792  precision=0.5714
+bkl     support= 160  errors=  46  error_rate=0.2875  recall=0.7125  precision=0.6909
+vasc    support=  22  errors=   4  error_rate=0.1818  recall=0.8182  precision=0.7826
+bcc     support=  82  errors=  14  error_rate=0.1707  recall=0.8293  precision=0.6869
+nv      support=1018  errors= 100  error_rate=0.0982  recall=0.9018  precision=0.9348
+
+Most common confusions (true -> predicted)
+----------------------------------------------------------------------
+nv -> mel: 47 images (4.6% of true class)
+mel -> nv: 40 images (23.1% of true class)
+nv -> bkl: 24 images (2.4% of true class)
+nv -> bcc: 17 images (1.7% of true class)
+bkl -> nv: 16 images (10.0% of true class)
+bkl -> akiec: 13 images (8.1% of true class)
+bkl -> mel: 12 images (7.5% of true class)
+mel -> bkl: 12 images (6.9% of true class)
+akiec -> bkl: 8 images (15.1% of true class)
+bcc -> bkl: 6 images (7.3% of true class)
+
+Row-normalized matrices are recall-style: each row sums to 1 and shows where a true class is sent. They are not used to change the model.
+
+
+MULTIMODAL CONFUSION-MATRIX ANALYSIS (TEST)
+======================================================================
+
+Test results are a frozen holdout evaluation. They are reported descriptively only and must not be used for tuning, model selection, or further training decisions.
+
+Samples: 1502. Correct: 1223. Errors: 279. Overall error rate: 0.1858.
+
+Saved overall metrics (not recomputed from predictions):
+  accuracy: 0.8142
+  macro_f1: 0.7163
+  weighted_f1: 0.8149
+  balanced_accuracy: 0.7407
+
+Per-class errors
+----------------------------------------------------------------------
+bkl     support= 167  errors=  72  error_rate=0.4311  recall=0.5689  precision=0.6690
+mel     support= 167  errors=  64  error_rate=0.3832  recall=0.6168  precision=0.5886
+akiec   support=  52  errors=  19  error_rate=0.3654  recall=0.6346  precision=0.5690
+bcc     support=  71  errors=  17  error_rate=0.2394  recall=0.7606  precision=0.5934
+df      support=  20  errors=   4  error_rate=0.2000  recall=0.8000  precision=0.7619
+nv      support=1004  errors= 101  error_rate=0.1006  recall=0.8994  precision=0.9112
+vasc    support=  21  errors=   2  error_rate=0.0952  recall=0.9048  precision=0.7917
+
+Most common confusions (true -> predicted)
+----------------------------------------------------------------------
+mel -> nv: 49 images (29.3% of true class)
+nv -> mel: 45 images (4.5% of true class)
+bkl -> nv: 30 images (18.0% of true class)
+nv -> bkl: 30 images (3.0% of true class)
+bkl -> mel: 17 images (10.2% of true class)
+nv -> bcc: 15 images (1.5% of true class)
+bkl -> bcc: 14 images (8.4% of true class)
+bkl -> akiec: 10 images (6.0% of true class)
+mel -> akiec: 8 images (4.8% of true class)
+bcc -> nv: 7 images (9.9% of true class)
+
+Row-normalized matrices are recall-style: each row sums to 1 and shows where a true class is sent. They are not used to change the model.
+
+CLASS IMBALANCE AND METRIC INTERPRETATION
+======================================================================
+
+Training images: 6981.
+Majority class: nv (67.08%).
+Majority/minority count ratio: 66.0:1.
+
+Accuracy and weighted F1 are dominated by the majority class (nv). Macro F1 and balanced accuracy average all seven classes equally, so they better reflect rare-class errors. This analysis does not change the model.
+
+Observed error structure (descriptive)
+----------------------------------------------------------------------
+nv is both the largest class and the class with the highest recall. Melanoma (mel) and benign keratinocytic lesions (bkl) are frequently confused with nv, which is consistent with overlapping dermoscopic appearance. Accuracy is therefore easier to achieve than balanced rare-class performance.
+
+These observations are not a reason to retrain, retune thresholds, or re-select checkpoints. The test split remains a frozen holdout.

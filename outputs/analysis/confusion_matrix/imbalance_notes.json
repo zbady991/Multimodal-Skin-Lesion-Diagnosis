@@ -1,0 +1,7 @@
+{
+    "train_samples": 6981,
+    "majority_class": "nv",
+    "majority_percentage": 67.08207993124194,
+    "min_max_ratio": 65.95774647887323,
+    "interpretation": "Accuracy and weighted F1 are dominated by the majority class (nv). Macro F1 and balanced accuracy average all seven classes equally, so they better reflect rare-class errors. This analysis does not change the model."
+}

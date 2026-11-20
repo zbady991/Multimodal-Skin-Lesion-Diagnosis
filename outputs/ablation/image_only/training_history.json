@@ -1,0 +1,77 @@
+[
+    {
+        "epoch": 1,
+        "train_loss": 0.3951799719895965,
+        "train_accuracy": 0.8780802292263611,
+        "train_macro_f1": 0.8402591080955731,
+        "val_loss": 0.6608322046792646,
+        "val_accuracy": 0.8172323759791122,
+        "val_macro_f1": 0.705669194356959,
+        "param_group_lrs": [
+            1e-05,
+            0.0001
+        ],
+        "image_lr": 1e-05,
+        "head_lr": 0.0001
+    },
+    {
+        "epoch": 2,
+        "train_loss": 0.2448161801437208,
+        "train_accuracy": 0.9108882521489972,
+        "train_macro_f1": 0.9029102951303061,
+        "val_loss": 0.6600529076749204,
+        "val_accuracy": 0.8231070496083551,
+        "val_macro_f1": 0.7085247501202578,
+        "param_group_lrs": [
+            1e-05,
+            0.0001
+        ],
+        "image_lr": 1e-05,
+        "head_lr": 0.0001
+    },
+    {
+        "epoch": 3,
+        "train_loss": 0.20135607221894325,
+        "train_accuracy": 0.9247851002865329,
+        "train_macro_f1": 0.9197761684099512,
+        "val_loss": 0.7089456000505424,
+        "val_accuracy": 0.8296344647519582,
+        "val_macro_f1": 0.7189525476873136,
+        "param_group_lrs": [
+            1e-05,
+            0.0001
+        ],
+        "image_lr": 1e-05,
+        "head_lr": 0.0001
+    },
+    {
+        "epoch": 4,
+        "train_loss": 0.19313081719259295,
+        "train_accuracy": 0.9299426934097421,
+        "train_macro_f1": 0.9176462838342229,
+        "val_loss": 0.7117663520221653,
+        "val_accuracy": 0.814621409921671,
+        "val_macro_f1": 0.7025383368298048,
+        "param_group_lrs": [
+            1e-05,
+            0.0001
+        ],
+        "image_lr": 1e-05,
+        "head_lr": 0.0001
+    },
+    {
+        "epoch": 5,
+        "train_loss": 0.16138111198109,
+        "train_accuracy": 0.9388252148997135,
+        "train_macro_f1": 0.9359654691877676,
+        "val_loss": 0.7497743081256248,
+        "val_accuracy": 0.8387728459530026,
+        "val_macro_f1": 0.7152575495800771,
+        "param_group_lrs": [
+            1e-05,
+            0.0001
+        ],
+        "image_lr": 1e-05,
+        "head_lr": 0.0001
+    }
+]

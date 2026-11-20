@@ -1,0 +1,23 @@
+{
+    "model_name": "image_only",
+    "train_csv": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\data\\processed\\train_processed.csv",
+    "val_csv": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\data\\processed\\validation_processed.csv",
+    "test_set_used": false,
+    "batch_size": 4,
+    "epochs": 10,
+    "image_lr": 1e-05,
+    "head_lr": 0.0001,
+    "weight_decay": 0.01,
+    "seed": 42,
+    "num_workers": 0,
+    "amp": true,
+    "n_train": 6981,
+    "n_val": 1532,
+    "resnet_checkpoint": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\resnet50\\best_resnet50.pth",
+    "frozen_blocks": [
+        "layer1",
+        "layer2",
+        "layer3"
+    ],
+    "notes": "Protocol matched to the existing multimodal trainer where applicable: batch 4, AMP, class-weighted CE, AdamW, ReduceLROnPlateau on val Macro F1. Image-only uses the same layer freeze and learning rates as multimodal. Tabular-only does not load images."
+}

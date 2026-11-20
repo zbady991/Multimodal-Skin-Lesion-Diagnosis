@@ -1,0 +1,37 @@
+MULTIMODAL CONFUSION-MATRIX ANALYSIS (VALIDATION)
+======================================================================
+
+Validation results were used for model selection. They may be discussed in the context of training.
+
+Samples: 1532. Correct: 1284. Errors: 248. Overall error rate: 0.1619.
+
+Saved overall metrics (not recomputed from predictions):
+  accuracy: 0.8381
+  macro_f1: 0.7265
+  weighted_f1: 0.8406
+  balanced_accuracy: 0.7421
+
+Per-class errors
+----------------------------------------------------------------------
+df      support=  24  errors=  10  error_rate=0.4167  recall=0.5833  precision=0.7000
+mel     support= 173  errors=  57  error_rate=0.3295  recall=0.6705  precision=0.6444
+akiec   support=  53  errors=  17  error_rate=0.3208  recall=0.6792  precision=0.5714
+bkl     support= 160  errors=  46  error_rate=0.2875  recall=0.7125  precision=0.6909
+vasc    support=  22  errors=   4  error_rate=0.1818  recall=0.8182  precision=0.7826
+bcc     support=  82  errors=  14  error_rate=0.1707  recall=0.8293  precision=0.6869
+nv      support=1018  errors= 100  error_rate=0.0982  recall=0.9018  precision=0.9348
+
+Most common confusions (true -> predicted)
+----------------------------------------------------------------------
+nv -> mel: 47 images (4.6% of true class)
+mel -> nv: 40 images (23.1% of true class)
+nv -> bkl: 24 images (2.4% of true class)
+nv -> bcc: 17 images (1.7% of true class)
+bkl -> nv: 16 images (10.0% of true class)
+bkl -> akiec: 13 images (8.1% of true class)
+bkl -> mel: 12 images (7.5% of true class)
+mel -> bkl: 12 images (6.9% of true class)
+akiec -> bkl: 8 images (15.1% of true class)
+bcc -> bkl: 6 images (7.3% of true class)
+
+Row-normalized matrices are recall-style: each row sums to 1 and shows where a true class is sent. They are not used to change the model.

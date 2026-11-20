@@ -1,0 +1,11 @@
+{
+    "model": "ResNet50",
+    "initialization": "scratch",
+    "seed": 42,
+    "epochs": 10,
+    "batch_size": 8,
+    "learning_rate": 0.0001,
+    "selection_metric": "validation_macro_f1",
+    "train_split": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\data\\processed\\train_processed.csv",
+    "validation_split": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\data\\processed\\validation_processed.csv"
+}

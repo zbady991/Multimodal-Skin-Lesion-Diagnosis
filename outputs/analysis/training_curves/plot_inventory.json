@@ -1,0 +1,57 @@
+{
+    "resnet50": {
+        "history_file": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\resnet50\\training_history.json",
+        "epochs": 10,
+        "columns": [
+            "epoch",
+            "train_loss",
+            "train_accuracy",
+            "train_macro_f1",
+            "val_loss",
+            "val_accuracy",
+            "val_macro_f1",
+            "learning_rate"
+        ],
+        "best_val_macro_f1_epoch": 7,
+        "best_val_macro_f1": 0.7013520501753455,
+        "figures": [
+            "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\analysis\\training_curves\\resnet50_loss.png",
+            "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\analysis\\training_curves\\resnet50_accuracy.png",
+            "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\analysis\\training_curves\\resnet50_macro_f1.png",
+            "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\analysis\\training_curves\\resnet50_learning_rate.png"
+        ],
+        "missing_metrics": []
+    },
+    "multimodal": {
+        "history_file": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\multimodal\\training_history.json",
+        "epochs": 10,
+        "columns": [
+            "epoch",
+            "train_loss",
+            "train_accuracy",
+            "train_macro_f1",
+            "val_loss",
+            "val_accuracy",
+            "val_macro_f1",
+            "image_lr",
+            "head_lr"
+        ],
+        "best_val_macro_f1_epoch": 4,
+        "best_val_macro_f1": 0.726456680654017,
+        "figures": [
+            "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\analysis\\training_curves\\multimodal_loss.png",
+            "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\analysis\\training_curves\\multimodal_accuracy.png",
+            "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\analysis\\training_curves\\multimodal_macro_f1.png",
+            "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\analysis\\training_curves\\multimodal_learning_rate.png"
+        ],
+        "missing_metrics": []
+    },
+    "ablation_image_only": {
+        "history_file": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\ablation\\image_only\\training_history.json",
+        "status": "missing"
+    },
+    "ablation_tabular_only": {
+        "history_file": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\ablation\\tabular_only\\training_history.json",
+        "status": "missing"
+    }
+}

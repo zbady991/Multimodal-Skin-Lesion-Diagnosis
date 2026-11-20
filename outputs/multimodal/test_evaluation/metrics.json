@@ -1,0 +1,9 @@
+{
+    "model": "Multimodal ResNet50 + Tabular",
+    "checkpoint_epoch": 4,
+    "test_samples": 1502,
+    "accuracy": 0.8142476697736352,
+    "macro_f1": 0.716298283794576,
+    "weighted_f1": 0.8149383227082505,
+    "balanced_accuracy": 0.7407102575160281
+}

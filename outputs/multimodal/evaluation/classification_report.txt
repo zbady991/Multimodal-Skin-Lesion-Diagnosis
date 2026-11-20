@@ -1,0 +1,23 @@
+MULTIMODAL VALIDATION REPORT
+=============================================
+
+Accuracy: 0.8381
+Macro F1: 0.7265
+Weighted F1: 0.8406
+Balanced Accuracy: 0.7421
+
+CLASSIFICATION REPORT
+---------------------------------------------
+              precision    recall  f1-score   support
+
+       akiec       0.57      0.68      0.62        53
+         bcc       0.69      0.83      0.75        82
+         bkl       0.69      0.71      0.70       160
+          df       0.70      0.58      0.64        24
+         mel       0.64      0.67      0.66       173
+          nv       0.93      0.90      0.92      1018
+        vasc       0.78      0.82      0.80        22
+
+    accuracy                           0.84      1532
+   macro avg       0.72      0.74      0.73      1532
+weighted avg       0.84      0.84      0.84      1532

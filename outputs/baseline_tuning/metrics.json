@@ -1,0 +1,21 @@
+{
+    "model": "Tuned Random Forest",
+    "input_modality": "tabular_only",
+    "number_of_features": 19,
+    "best_parameters": {
+        "n_estimators": 500,
+        "min_samples_split": 5,
+        "min_samples_leaf": 1,
+        "max_features": "sqrt",
+        "max_depth": 10
+    },
+    "best_cv_macro_f1": 0.22949952961593498,
+    "validation_accuracy": 0.402088772845953,
+    "validation_balanced_accuracy": 0.29498718596277007,
+    "validation_macro_f1": 0.20820253485929557,
+    "validation_weighted_f1": 0.4814561451798186,
+    "tuning_time_seconds": 17.480019330978394,
+    "cv_strategy": "StratifiedGroupKFold",
+    "cv_folds": 3,
+    "group_column": "lesion_id"
+}

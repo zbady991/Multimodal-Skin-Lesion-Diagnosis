@@ -1,0 +1,13 @@
+{
+    "model": "RandomForestClassifier",
+    "input_modality": "tabular_only",
+    "number_of_features": 19,
+    "training_samples": 6981,
+    "validation_samples": 1532,
+    "training_time_seconds": 0.8013918399810791,
+    "accuracy": 0.3838120104438642,
+    "balanced_accuracy": 0.28438994882910956,
+    "macro_f1": 0.20137554251343753,
+    "weighted_f1": 0.46660029453073726,
+    "random_state": 42
+}

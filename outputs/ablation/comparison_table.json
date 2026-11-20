@@ -1,0 +1,68 @@
+[
+    {
+        "model": "tabular_only_nn",
+        "protocol": "ablation",
+        "status": "missing",
+        "path": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\ablation\\tabular_only\\validation_evaluation\\metrics.json"
+    },
+    {
+        "model": "image_only",
+        "protocol": "ablation",
+        "status": "missing",
+        "path": "D:\\study\\Senior\\Deep learning\\Multimodal-Skin-Lesion-Diagnosis DL\\outputs\\ablation\\image_only\\validation_evaluation\\metrics.json"
+    },
+    {
+        "model": "multimodal",
+        "protocol": "ablation_or_historical_val",
+        "status": "available",
+        "accuracy": 0.8381201044386423,
+        "macro_f1": 0.726456680654017,
+        "weighted_f1": 0.840634731870371,
+        "balanced_accuracy": 0.7421167330455479,
+        "best_epoch": null,
+        "note": "",
+        "akiec_precision": 0.5714285714285714,
+        "akiec_recall": 0.6792452830188679,
+        "akiec_f1": 0.6206896551724138,
+        "bcc_precision": 0.6868686868686869,
+        "bcc_recall": 0.8292682926829268,
+        "bcc_f1": 0.7513812154696132,
+        "bkl_precision": 0.6909090909090909,
+        "bkl_recall": 0.7125,
+        "bkl_f1": 0.7015384615384616,
+        "df_precision": 0.7,
+        "df_recall": 0.5833333333333334,
+        "df_f1": 0.6363636363636364,
+        "mel_precision": 0.6444444444444445,
+        "mel_recall": 0.6705202312138728,
+        "mel_f1": 0.6572237960339944,
+        "nv_precision": 0.9348268839103869,
+        "nv_recall": 0.9017681728880157,
+        "nv_f1": 0.918,
+        "vasc_precision": 0.782608695652174,
+        "vasc_recall": 0.8181818181818182,
+        "vasc_f1": 0.8
+    },
+    {
+        "model": "random_forest_tuned",
+        "protocol": "historical_tabular_ml",
+        "status": "available",
+        "accuracy": 0.402088772845953,
+        "macro_f1": 0.20820253485929557,
+        "weighted_f1": 0.4814561451798186,
+        "balanced_accuracy": 0.29498718596277007,
+        "best_epoch": null,
+        "note": "Tabular Random Forest, not part of the DL ablation protocol."
+    },
+    {
+        "model": "resnet50_historical",
+        "protocol": "historical_full_finetune_batch8",
+        "status": "historical_history_only",
+        "accuracy": 0.8302872062663186,
+        "macro_f1": 0.7013520501753455,
+        "weighted_f1": null,
+        "balanced_accuracy": null,
+        "best_epoch": 7,
+        "note": "Weighted F1 and balanced accuracy were not stored for the historical ResNet50 run."
+    }
+]
