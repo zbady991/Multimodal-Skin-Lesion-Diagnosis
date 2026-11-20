@@ -1,0 +1,10 @@
+{
+  "run": "image_only_seed43",
+  "model": "image_only",
+  "seed": 43,
+  "class_weights": true,
+  "training_time_s": 2295.3,
+  "peak_gpu_memory_gb": 0.34,
+  "checkpoint": "outputs\\seeds\\image_only_seed43\\best_model.pth",
+  "gpu": "NVIDIA GeForce RTX 2060 with Max-Q Design"
+}

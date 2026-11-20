@@ -1,0 +1,221 @@
+{
+  "split": "validation",
+  "runs": {
+    "multimodal_seed42": {
+      "macro_f1": 0.726456680654017,
+      "balanced_accuracy": 0.7421167330455479,
+      "weighted_f1": 0.840634731870371,
+      "accuracy": 0.8381201044386423,
+      "per_class_f1": {
+        "akiec": 0.6206896551724138,
+        "bcc": 0.7513812154696132,
+        "bkl": 0.7015384615384616,
+        "df": 0.6363636363636364,
+        "mel": 0.6572237960339944,
+        "nv": 0.918,
+        "vasc": 0.8
+      }
+    },
+    "multimodal_seed43": {
+      "macro_f1": 0.7223056445299806,
+      "balanced_accuracy": 0.7328457132159063,
+      "weighted_f1": 0.8377265628318322,
+      "accuracy": 0.8335509138381201,
+      "per_class_f1": {
+        "akiec": 0.5742574257425742,
+        "bcc": 0.7674418604651163,
+        "bkl": 0.709480122324159,
+        "df": 0.6122448979591837,
+        "mel": 0.6391752577319587,
+        "nv": 0.9163306451612904,
+        "vasc": 0.8372093023255814
+      }
+    },
+    "multimodal_seed44": {
+      "macro_f1": 0.7162849725646815,
+      "balanced_accuracy": 0.7337500418091814,
+      "weighted_f1": 0.8418400949008527,
+      "accuracy": 0.839425587467363,
+      "per_class_f1": {
+        "akiec": 0.5470085470085471,
+        "bcc": 0.7542857142857143,
+        "bkl": 0.6819484240687679,
+        "df": 0.6122448979591837,
+        "mel": 0.6770186335403726,
+        "nv": 0.9233067729083665,
+        "vasc": 0.8181818181818182
+      }
+    },
+    "image_only_seed42": {
+      "macro_f1": 0.7246591086548448,
+      "balanced_accuracy": 0.708377614796776,
+      "weighted_f1": 0.8386585134808546,
+      "accuracy": 0.8413838120104439,
+      "per_class_f1": {
+        "akiec": 0.6060606060606061,
+        "bcc": 0.7682926829268293,
+        "bkl": 0.6787878787878788,
+        "df": 0.6222222222222222,
+        "mel": 0.6394984326018809,
+        "nv": 0.9205426356589147,
+        "vasc": 0.8372093023255814
+      }
+    },
+    "image_only_seed43": {
+      "macro_f1": 0.7228481674645325,
+      "balanced_accuracy": 0.7306490808523669,
+      "weighted_f1": 0.8382575386414075,
+      "accuracy": 0.835509138381201,
+      "per_class_f1": {
+        "akiec": 0.5789473684210527,
+        "bcc": 0.7745664739884393,
+        "bkl": 0.668693009118541,
+        "df": 0.6222222222222222,
+        "mel": 0.659217877094972,
+        "nv": 0.919080919080919,
+        "vasc": 0.8372093023255814
+      }
+    },
+    "image_only_seed44": {
+      "macro_f1": 0.7216052441355388,
+      "balanced_accuracy": 0.7088694530840132,
+      "weighted_f1": 0.8374091595787471,
+      "accuracy": 0.8381201044386423,
+      "per_class_f1": {
+        "akiec": 0.5849056603773585,
+        "bcc": 0.7647058823529411,
+        "bkl": 0.6708074534161491,
+        "df": 0.6363636363636364,
+        "mel": 0.6449704142011834,
+        "nv": 0.9202153695545766,
+        "vasc": 0.8292682926829268
+      }
+    }
+  },
+  "aggregate": {
+    "multimodal": {
+      "n_seeds": 3,
+      "macro_f1": {
+        "mean": 0.721682432582893,
+        "sd": 0.005114411619327096
+      },
+      "balanced_accuracy": {
+        "mean": 0.7362374960235453,
+        "sd": 0.005111606745615256
+      },
+      "weighted_f1": {
+        "mean": 0.8400671298676853,
+        "sd": 0.0021146904137023174
+      },
+      "accuracy": {
+        "mean": 0.8370322019147084,
+        "sd": 0.0030847360484677813
+      },
+      "per_class_f1_mean": {
+        "akiec": 0.5806518759745117,
+        "bcc": 0.7577029300734813,
+        "bkl": 0.6976556693104629,
+        "df": 0.6202844774273346,
+        "mel": 0.6578058957687752,
+        "nv": 0.9192124726898857,
+        "vasc": 0.8184637068357999
+      }
+    },
+    "image_only": {
+      "n_seeds": 3,
+      "macro_f1": {
+        "mean": 0.7230375067516387,
+        "sd": 0.0015357112846497033
+      },
+      "balanced_accuracy": {
+        "mean": 0.7159653829110519,
+        "sd": 0.012718833089125336
+      },
+      "weighted_f1": {
+        "mean": 0.8381084039003364,
+        "sd": 0.0006378888393941446
+      },
+      "accuracy": {
+        "mean": 0.8383376849434291,
+        "sd": 0.002943374512286514
+      },
+      "per_class_f1_mean": {
+        "akiec": 0.5899712116196724,
+        "bcc": 0.7691883464227365,
+        "bkl": 0.6727627804408564,
+        "df": 0.6269360269360269,
+        "mel": 0.6478955746326788,
+        "nv": 0.9199463080981367,
+        "vasc": 0.8345622991113633
+      }
+    }
+  },
+  "data_strategy": {
+    "multimodal_no_class_weights_seed42": {
+      "macro_f1": 0.7349983857227728,
+      "balanced_accuracy": 0.7293071045348862,
+      "weighted_f1": 0.8476904102412754,
+      "accuracy": 0.8459530026109661,
+      "per_class_f1": {
+        "akiec": 0.5688073394495413,
+        "bcc": 0.7558139534883721,
+        "bkl": 0.7090909090909091,
+        "df": 0.6666666666666666,
+        "mel": 0.6685552407932012,
+        "nv": 0.9260545905707196,
+        "vasc": 0.85
+      }
+    },
+    "multimodal_class_weights_seed42": {
+      "macro_f1": 0.726456680654017,
+      "balanced_accuracy": 0.7421167330455479,
+      "weighted_f1": 0.840634731870371,
+      "accuracy": 0.8381201044386423,
+      "per_class_f1": {
+        "akiec": 0.6206896551724138,
+        "bcc": 0.7513812154696132,
+        "bkl": 0.7015384615384616,
+        "df": 0.6363636363636364,
+        "mel": 0.6572237960339944,
+        "nv": 0.918,
+        "vasc": 0.8
+      }
+    }
+  },
+  "cost": {
+    "resnet50": {
+      "parameters_millions": 23.52,
+      "size_mb_fp32": 89.7,
+      "inference_ms_per_image": 17.24,
+      "device": "NVIDIA GeForce RTX 2060 with Max-Q Design"
+    },
+    "vit": {
+      "parameters_millions": 85.8,
+      "size_mb_fp32": 327.3,
+      "inference_ms_per_image": 40.91,
+      "device": "NVIDIA GeForce RTX 2060 with Max-Q Design"
+    },
+    "multimodal": {
+      "parameters_millions": 24.06,
+      "size_mb_fp32": 91.8,
+      "inference_ms_per_image": 20.65,
+      "device": "NVIDIA GeForce RTX 2060 with Max-Q Design",
+      "training_time_min_mean": 38.7,
+      "peak_train_gpu_memory_gb": 0.35
+    },
+    "image_only": {
+      "parameters_millions": 24.03,
+      "size_mb_fp32": 91.7,
+      "inference_ms_per_image": 18.55,
+      "device": "NVIDIA GeForce RTX 2060 with Max-Q Design",
+      "training_time_min_mean": 38.2,
+      "peak_train_gpu_memory_gb": 0.34
+    },
+    "tabular_only": {
+      "parameters_millions": 0.03,
+      "size_mb_fp32": 0.1,
+      "inference_ms_per_image": 1.98,
+      "device": "NVIDIA GeForce RTX 2060 with Max-Q Design"
+    }
+  }
+}

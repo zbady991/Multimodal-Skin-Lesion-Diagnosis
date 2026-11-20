@@ -1,0 +1,10 @@
+{
+  "run": "multimodal_seed42_noweights",
+  "model": "multimodal",
+  "seed": 42,
+  "class_weights": false,
+  "training_time_s": 2342.4,
+  "peak_gpu_memory_gb": 0.35,
+  "checkpoint": "outputs\\seeds\\multimodal_seed42_noweights\\best_multimodal.pth",
+  "gpu": "NVIDIA GeForce RTX 2060 with Max-Q Design"
+}
