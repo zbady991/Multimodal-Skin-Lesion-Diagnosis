@@ -258,16 +258,19 @@ def ground_truth_html(image_path):
     image_id = find_image_id(image_path)
     row = GROUND_TRUTH.get(image_id) if image_id else None
     if row is None:
-        return ("<div style='padding:10px 14px;border-radius:10px;background:#f1f5f9;color:#475569;'>"
-                "Ground truth: <b>unknown</b> (not a HAM10000 image). Predictions cannot be checked.</div>"), None
+        return ("<div style='padding:10px 14px;border-radius:10px;background:#f1f5f9;'>"
+                "<span style='color:#475569 !important;'>Ground truth: unknown (not a HAM10000 image). "
+                "Predictions cannot be checked.</span></div>"), None
     info = DISEASE_INFO[row.dx]
     split_note = {"test": "held-out TEST image (never seen in training)",
                   "validation": "VALIDATION image (used for model selection)",
                   "train": "TRAINING image (the model has seen it)"}[row.split]
-    html = (f"<div style='padding:10px 14px;border-radius:10px;background:#eef2ff;color:#1e293b;'>"
-            f"<b>Ground truth ({image_id}):</b> {row.dx.upper()} — {info['short_name']} "
-            f"&nbsp;·&nbsp; confirmed by <i>{row.dx_type}</i> &nbsp;·&nbsp; {split_note}<br/>"
-            f"Real metadata: age {row.age}, {row.sex}, {row.localization}</div>")
+    dark = "color:#1e293b !important;"
+    html = (f"<div style='padding:10px 14px;border-radius:10px;background:#eef2ff;{dark}'>"
+            f"<span style='font-weight:700;{dark}'>Ground truth ({image_id}):</span> "
+            f"<span style='font-weight:700;color:#4338ca !important;'>{row.dx.upper()} — {info['short_name']}</span>"
+            f"<span style='{dark}'> · confirmed by {row.dx_type} · {split_note}</span><br/>"
+            f"<span style='{dark}'>Real metadata: age {row.age}, {row.sex}, {row.localization}</span></div>")
     return html, row.dx
 
 
@@ -276,12 +279,14 @@ def autofill_metadata(image_path):
     image_id = find_image_id(image_path)
     row = GROUND_TRUTH.get(image_id) if image_id else None
     gt_html, _ = ground_truth_html(image_path) if image_path else ("", None)
+    hint = ("<p style='margin:8px 0 0 0;color:#0f766e !important;font-weight:600;'>"
+            "▶ Press the Run / Compare button to get a new prediction.</p>") if image_path else ""
     if row is None:
-        return gr.update(), gr.update(), gr.update(), gt_html
+        return gr.update(), gr.update(), gr.update(), gt_html + hint, None, ""
     age = 50 if pd.isna(row.age) else int(row.age)
     sex = row.sex if row.sex in SEX_OPTIONS else "unknown"
     loc = row.localization if row.localization in LOCALIZATION_OPTIONS else "unknown"
-    return age, sex, loc, gt_html
+    return age, sex, loc, gt_html + hint, None, ""
 
 
 def run_single_inference(image_path, age, sex, localization, model_choice):
@@ -598,9 +603,14 @@ Only the final multimodal model was evaluated on the test set, to keep the holdo
 
     # ---------------- EVENTS ----------------
     image_input.change(autofill_metadata, inputs=[image_input],
-                       outputs=[age_input, sex_input, loc_input, result_header])
-    comp_image.change(autofill_metadata, inputs=[comp_image],
-                      outputs=[comp_age, comp_sex, comp_loc, comp_table])
+                       outputs=[age_input, sex_input, loc_input, result_header, prob_label, clinical_notes])
+
+    def autofill_compare(image_path):
+        age, sex, loc, html, _, _ = autofill_metadata(image_path)
+        return age, sex, loc, html, ""
+
+    comp_image.change(autofill_compare, inputs=[comp_image],
+                      outputs=[comp_age, comp_sex, comp_loc, comp_table, comp_summary])
     diagnose_btn.click(run_single_inference, inputs=[image_input, age_input, sex_input, loc_input, model_select],
                        outputs=[result_header, prob_label, clinical_notes])
     compare_btn.click(run_all_models, inputs=[comp_image, comp_age, comp_sex, comp_loc],

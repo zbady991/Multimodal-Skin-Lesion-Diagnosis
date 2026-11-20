@@ -1,7 +1,7 @@
 # Multimodal Skin-Lesion Diagnosis (HAM10000)
 
 **Course:** Deep Learning – AI403, Pharos University in Alexandria (Fall 2026)
-**Team:** TEAM_NAME — Member 1, Member 2, Member 3, Member 4
+**Team:** AAMP — Abdulrhman Mohammed Badr, Abdulrhman Mohammed Elsaid, Mahmoud Ehab, Philopater Ayman
 **Project idea:** #1 Multimodal skin-lesion diagnosis (dermoscopic image + patient metadata → 7 classes)
 
 ## 1. Task and best result
@@ -19,7 +19,7 @@ Given a dermoscopic image and patient metadata (age, sex, lesion localization), 
 | **Multimodal ResNet50 + tabular MLP** | **test** | **0.814** | **0.716** | **0.741** |
 
 Primary metric: **macro F1** (dataset is heavily imbalanced: `nv` = 67% of train).
-All results are from a single seed (42). Only the multimodal model has been evaluated on the held-out test set.
+Single runs use seed 42. Multimodal and image-only were repeated with seeds 42/43/44: validation macro F1 0.722 ± 0.005 vs 0.723 ± 0.002 (`python -m src.training.run_seeds`, then `python -m src.evaluation.summarize_seeds`). Only the multimodal model has been evaluated on the held-out test set.
 
 ## 2. Project structure
 
@@ -113,8 +113,8 @@ Opens a Gradio interface at http://localhost:7860. Upload a lesion image, enter 
 | Model | Hardware | Training time |
 |---|---|---|
 | ViT-B/16 (15 epochs) | NVIDIA RTX 2060 (6 GB), peak memory 1.95 GB | ~82 min (4,931 s) |
-| ResNet50 (10 epochs) | NVIDIA RTX 2060 (6 GB) | TODO |
-| Multimodal (10 epochs) | NVIDIA RTX 2060 (6 GB) | TODO |
+| ResNet50 (10 epochs) | NVIDIA RTX 2060 (6 GB) | not recorded |
+| Multimodal (10 epochs) | NVIDIA RTX 2060 (6 GB) | ≈ 39 min |
 
 Trained checkpoints: SHARED_DRIVE_LINK
 
