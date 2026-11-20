@@ -73,5 +73,80 @@
         ],
         "image_lr": 1e-05,
         "head_lr": 0.0001
+    },
+    {
+        "epoch": 6,
+        "train_loss": 0.14324005000363887,
+        "train_accuracy": 0.9436962750716332,
+        "train_macro_f1": 0.9407672413893607,
+        "val_loss": 0.7608038588363374,
+        "val_accuracy": 0.8283289817232375,
+        "val_macro_f1": 0.7137700679797305,
+        "param_group_lrs": [
+            5e-06,
+            5e-05
+        ],
+        "image_lr": 5e-06,
+        "head_lr": 5e-05
+    },
+    {
+        "epoch": 7,
+        "train_loss": 0.12239209584634156,
+        "train_accuracy": 0.9541547277936963,
+        "train_macro_f1": 0.9540863550331956,
+        "val_loss": 0.8547701935245037,
+        "val_accuracy": 0.8263707571801566,
+        "val_macro_f1": 0.70102226206592,
+        "param_group_lrs": [
+            5e-06,
+            5e-05
+        ],
+        "image_lr": 5e-06,
+        "head_lr": 5e-05
+    },
+    {
+        "epoch": 8,
+        "train_loss": 0.10714121825475426,
+        "train_accuracy": 0.9601719197707737,
+        "train_macro_f1": 0.9569738512940811,
+        "val_loss": 0.8072975821320928,
+        "val_accuracy": 0.8413838120104439,
+        "val_macro_f1": 0.7246591086548448,
+        "param_group_lrs": [
+            5e-06,
+            5e-05
+        ],
+        "image_lr": 5e-06,
+        "head_lr": 5e-05
+    },
+    {
+        "epoch": 9,
+        "train_loss": 0.10651591271290092,
+        "train_accuracy": 0.9583094555873926,
+        "train_macro_f1": 0.956091263318149,
+        "val_loss": 0.8274556162701833,
+        "val_accuracy": 0.8283289817232375,
+        "val_macro_f1": 0.6984681723523599,
+        "param_group_lrs": [
+            5e-06,
+            5e-05
+        ],
+        "image_lr": 5e-06,
+        "head_lr": 5e-05
+    },
+    {
+        "epoch": 10,
+        "train_loss": 0.10939963023426304,
+        "train_accuracy": 0.9580229226361031,
+        "train_macro_f1": 0.9538548711564827,
+        "val_loss": 0.8256324722516775,
+        "val_accuracy": 0.8328981723237598,
+        "val_macro_f1": 0.7001695579279179,
+        "param_group_lrs": [
+            5e-06,
+            5e-05
+        ],
+        "image_lr": 5e-06,
+        "head_lr": 5e-05
     }
 ]

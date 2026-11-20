@@ -1,14 +1,26 @@
-"""DermAI — Multimodal Skin Lesion Diagnosis System
+"""DermAI — Multimodal Skin Lesion Diagnosis System (v2)
 Pharos University in Alexandria - Faculty of Computer Science & AI
 Course: Deep Learning (AI403) — Fall 2026
 Supervised by: Dr. Sahar Ghanem | TAs: Esraa Habiba, Philopater Hany, Mohamed Ashraf
+
+v2 changes:
+  * Loads every trained model that exists on disk (multimodal, ResNet50, ViT-B/16,
+    fair image-only ablation, tabular-only NN, Random Forest). Missing checkpoints
+    are skipped instead of crashing the app.
+  * If the uploaded image is a HAM10000 image, the real diagnosis and metadata are
+    looked up so predictions can be checked against the ground truth.
+  * "All models" tab runs every model on the same case, with timing.
+  * Benchmark tab: numbers are labelled with the split they come from (val/test).
 """
 
 import os
 os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
 
+import re
+import sys
+import time
 from pathlib import Path
-import json
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -18,17 +30,18 @@ import torch.nn.functional as F
 from torchvision import transforms
 import gradio as gr
 
-import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.models.multimodal import MultimodalClassifier
 from src.models.resnet50 import ResNet50Classifier
+from src.models.vit import ViTClassifier
+from src.models.ablation import ImageOnlyClassifier, TabularOnlyClassifier
 
 
 # =====================================================================
-# 1. MEDICAL ONTOLOGY & KNOWLEDGE BASE
+# 1. MEDICAL KNOWLEDGE BASE
 # =====================================================================
 CLASS_NAMES = ["akiec", "bcc", "bkl", "df", "mel", "nv", "vasc"]
 
@@ -106,269 +119,260 @@ DISEASE_INFO = {
 }
 
 LOCALIZATION_OPTIONS = [
-    "back",
-    "lower extremity",
-    "trunk",
-    "upper extremity",
-    "abdomen",
-    "face",
-    "chest",
-    "foot",
-    "neck",
-    "scalp",
-    "hand",
-    "ear",
-    "genital",
-    "acral",
-    "unknown"
+    "back", "lower extremity", "trunk", "upper extremity", "abdomen", "face", "chest",
+    "foot", "neck", "scalp", "hand", "ear", "genital", "acral", "unknown",
 ]
-
 SEX_OPTIONS = ["male", "female", "unknown"]
 
 
 # =====================================================================
-# 2. MODEL PIPELINE INITIALIZATION
+# 2. GROUND-TRUTH LOOKUP (HAM10000 metadata of the split files)
+# =====================================================================
+def load_ground_truth():
+    frames = []
+    for split in ["train", "validation", "test"]:
+        path = PROJECT_ROOT / "data" / "splits" / f"{split}.csv"
+        if path.exists():
+            df = pd.read_csv(path)
+            df["split"] = split
+            frames.append(df)
+    if not frames:
+        return {}
+    df = pd.concat(frames, ignore_index=True)
+    return {row.image_id: row for row in df.itertuples(index=False)}
+
+
+GROUND_TRUTH = load_ground_truth()
+
+
+def find_image_id(filepath):
+    if not filepath:
+        return None
+    match = re.search(r"ISIC_\d{7}", os.path.basename(str(filepath)))
+    return match.group(0) if match else None
+
+
+# =====================================================================
+# 3. MODEL REGISTRY (loads whatever exists on disk)
 # =====================================================================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"[DermAI] Initializing inference engine on: {DEVICE}")
+print(f"[DermAI] Inference device: {DEVICE}")
 
 IMAGE_TRANSFORM = transforms.Compose([
-    transforms.Resize((224, 224)),
+    transforms.Resize((224, 224)),  # identical to src/datasets/transforms.get_val_transforms
     transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
-    )
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
-# Load Tabular Preprocessor
-PREPROCESSOR_PATH = PROJECT_ROOT / "data" / "processed" / "tabular_preprocessor.joblib"
-preprocessor = joblib.load(PREPROCESSOR_PATH)
+preprocessor = joblib.load(PROJECT_ROOT / "data" / "processed" / "tabular_preprocessor.joblib")
 TABULAR_FEATURE_NAMES = list(preprocessor.get_feature_names_out())
 
-# Load Multimodal Model
-MULTIMODAL_CKPT = PROJECT_ROOT / "outputs" / "multimodal" / "best_multimodal.pth"
-multimodal_model = MultimodalClassifier(num_classes=7, tabular_features=19)
-ckpt = torch.load(MULTIMODAL_CKPT, map_location=DEVICE, weights_only=False)
-multimodal_model.load_state_dict(ckpt["model_state_dict"])
-multimodal_model.to(DEVICE)
-multimodal_model.eval()
+OUT = PROJECT_ROOT / "outputs"
 
-# Load ResNet-50 Model
-RESNET_CKPT = PROJECT_ROOT / "outputs" / "resnet50" / "best_resnet50.pth"
-resnet_model = ResNet50Classifier(num_classes=7, pretrained=False)
-resnet_ckpt = torch.load(RESNET_CKPT, map_location=DEVICE, weights_only=False)
-resnet_model.load_state_dict(resnet_ckpt["model_state_dict"])
-resnet_model.to(DEVICE)
-resnet_model.eval()
+# name -> (builder, checkpoint path, input kind, short description)
+MODEL_SPECS = {
+    "Multimodal (ResNet50 + Tabular MLP)": (
+        lambda: MultimodalClassifier(num_classes=7, tabular_features=19),
+        OUT / "multimodal" / "best_multimodal.pth", "both", "Image + metadata (proposed)"),
+    "ViT-B/16 (Image only)": (
+        lambda: ViTClassifier(num_classes=7, pretrained=False),
+        OUT / "vit" / "best_model.pth", "image", "Vision Transformer, ImageNet-pretrained"),
+    "ResNet-50 (Image only)": (
+        lambda: ResNet50Classifier(num_classes=7, pretrained=False),
+        OUT / "resnet50" / "best_resnet50.pth", "image", "CNN, ImageNet-pretrained"),
+    "Image-only Ablation (same protocol as multimodal)": (
+        lambda: ImageOnlyClassifier(num_classes=7, pretrained=False, resnet_checkpoint=None),
+        OUT / "ablation" / "image_only" / "best_model.pth", "image", "Multimodal minus metadata"),
+    "Tabular-only NN (Ablation)": (
+        lambda: TabularOnlyClassifier(num_classes=7, tabular_features=19),
+        OUT / "ablation" / "tabular_only" / "best_model.pth", "tabular", "Multimodal minus image"),
+    "Random Forest (Baseline, metadata only)": (
+        None, OUT / "baseline_tuning" / "best_random_forest.joblib", "rf", "Classical ML baseline"),
+}
 
-# Load Baseline Random Forest
-RF_MODEL_PATH = PROJECT_ROOT / "outputs" / "baseline_tuning" / "best_random_forest.joblib"
-rf_model = joblib.load(RF_MODEL_PATH)
+MODELS = {}       # name -> loaded model
+MODEL_KIND = {}   # name -> input kind
+for name, (builder, ckpt_path, kind, _) in MODEL_SPECS.items():
+    if not ckpt_path.exists():
+        print(f"[DermAI] SKIP {name}: checkpoint not found ({ckpt_path.relative_to(PROJECT_ROOT)})")
+        continue
+    try:
+        if kind == "rf":
+            model = joblib.load(ckpt_path)
+        else:
+            model = builder()
+            ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+            model.load_state_dict(ckpt["model_state_dict"])
+            model.to(DEVICE).eval()
+        MODELS[name] = model
+        MODEL_KIND[name] = kind
+        print(f"[DermAI] Loaded {name}")
+    except Exception as exc:  # keep the app alive if one model fails
+        print(f"[DermAI] FAILED {name}: {exc}")
 
-print("[DermAI] All models and preprocessors loaded successfully!")
+if not MODELS:
+    raise RuntimeError("No model could be loaded. Check the outputs/ folder.")
+
+MODEL_NAMES = list(MODELS.keys())
+DEFAULT_MODEL = MODEL_NAMES[0]
+print(f"[DermAI] {len(MODELS)} models ready.")
 
 
 # =====================================================================
-# 3. CORE DIAGNOSTIC INFERENCE LOGIC
+# 4. INFERENCE
 # =====================================================================
-def run_single_inference(image, age, sex, localization, model_choice):
-    if image is None and model_choice != "Random Forest (Clinical Tabular Only)":
-        empty_header = """
-        <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 18px; text-align: center; color: #991b1b;">
-            <h3 style="margin: 0 0 6px 0;">⚠️ Missing Image Input</h3>
-            <p style="margin: 0; font-size: 0.95em;">Please upload or select a dermatoscopic lesion image to perform diagnosis.</p>
-        </div>
-        """
-        return empty_header, {}, "Please upload an image."
+def prepare_inputs(image_path, age, sex, localization):
+    sample = pd.DataFrame([{"age": float(age), "sex": str(sex), "localization": str(localization)}])
+    tab_np = preprocessor.transform(sample)
+    tab_tensor = torch.tensor(tab_np, dtype=torch.float32).to(DEVICE)
+    img_tensor = None
+    if image_path:
+        with Image.open(image_path) as img:
+            img_tensor = IMAGE_TRANSFORM(img.convert("RGB")).unsqueeze(0).to(DEVICE)
+    return tab_np, tab_tensor, img_tensor
 
-    # 1. Process Tabular Metadata
-    sample_df = pd.DataFrame([{
-        "age": float(age),
-        "sex": str(sex),
-        "localization": str(localization)
-    }])
-    tab_features_np = preprocessor.transform(sample_df)
-    tab_tensor = torch.tensor(tab_features_np, dtype=torch.float32).to(DEVICE)
 
-    # 2. Process Image Tensor
-    if image is not None:
-        pil_img = Image.fromarray(image).convert("RGB")
-        img_tensor = IMAGE_TRANSFORM(pil_img).unsqueeze(0).to(DEVICE)
-
-    # 3. Run Inference
-    if "Multimodal" in model_choice:
-        with torch.no_grad():
-            logits = multimodal_model(img_tensor, tab_tensor)
-            probs = F.softmax(logits, dim=1).cpu().numpy()[0]
-    elif "ResNet" in model_choice:
-        with torch.no_grad():
-            logits = resnet_model(img_tensor)
-            probs = F.softmax(logits, dim=1).cpu().numpy()[0]
-    elif "Random Forest" in model_choice:
-        rf_df = pd.DataFrame(tab_features_np, columns=TABULAR_FEATURE_NAMES)
-        probs = rf_model.predict_proba(rf_df)[0]
+@torch.no_grad()
+def predict(name, tab_np, tab_tensor, img_tensor):
+    """Returns (probabilities, inference time in ms)."""
+    model, kind = MODELS[name], MODEL_KIND[name]
+    if DEVICE.type == "cuda":
+        torch.cuda.synchronize()
+    start = time.perf_counter()
+    if kind == "rf":
+        probs = model.predict_proba(pd.DataFrame(tab_np, columns=TABULAR_FEATURE_NAMES))[0]
     else:
-        probs = np.zeros(len(CLASS_NAMES))
+        if kind == "both":
+            logits = model(img_tensor, tab_tensor)
+        elif kind == "image":
+            logits = model(img_tensor)
+        else:
+            logits = model(tab_tensor)
+        probs = F.softmax(logits.float(), dim=1).cpu().numpy()[0]
+    if DEVICE.type == "cuda":
+        torch.cuda.synchronize()
+    return np.asarray(probs), (time.perf_counter() - start) * 1000
 
-    # 4. Construct Probability Distribution
-    prob_dict = {
-        f"{cls.upper()} - {DISEASE_INFO[cls]['short_name']}": float(prob)
-        for cls, prob in zip(CLASS_NAMES, probs)
-    }
 
-    # 5. Extract Top Prediction & Medical Facts
+def ground_truth_html(image_path):
+    image_id = find_image_id(image_path)
+    row = GROUND_TRUTH.get(image_id) if image_id else None
+    if row is None:
+        return ("<div style='padding:10px 14px;border-radius:10px;background:#f1f5f9;color:#475569;'>"
+                "Ground truth: <b>unknown</b> (not a HAM10000 image). Predictions cannot be checked.</div>"), None
+    info = DISEASE_INFO[row.dx]
+    split_note = {"test": "held-out TEST image (never seen in training)",
+                  "validation": "VALIDATION image (used for model selection)",
+                  "train": "TRAINING image (the model has seen it)"}[row.split]
+    html = (f"<div style='padding:10px 14px;border-radius:10px;background:#eef2ff;color:#1e293b;'>"
+            f"<b>Ground truth ({image_id}):</b> {row.dx.upper()} — {info['short_name']} "
+            f"&nbsp;·&nbsp; confirmed by <i>{row.dx_type}</i> &nbsp;·&nbsp; {split_note}<br/>"
+            f"Real metadata: age {row.age}, {row.sex}, {row.localization}</div>")
+    return html, row.dx
+
+
+def autofill_metadata(image_path):
+    """When a HAM10000 image is uploaded, fill in its real age/sex/site."""
+    image_id = find_image_id(image_path)
+    row = GROUND_TRUTH.get(image_id) if image_id else None
+    gt_html, _ = ground_truth_html(image_path) if image_path else ("", None)
+    if row is None:
+        return gr.update(), gr.update(), gr.update(), gt_html
+    age = 50 if pd.isna(row.age) else int(row.age)
+    sex = row.sex if row.sex in SEX_OPTIONS else "unknown"
+    loc = row.localization if row.localization in LOCALIZATION_OPTIONS else "unknown"
+    return age, sex, loc, gt_html
+
+
+def run_single_inference(image_path, age, sex, localization, model_choice):
+    kind = MODEL_KIND[model_choice]
+    if image_path is None and kind in ("image", "both"):
+        warn = ("<div style='background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:18px;"
+                "text-align:center;color:#991b1b;'><h3 style='margin:0 0 6px 0;'>⚠️ Missing Image Input</h3>"
+                "<p style='margin:0;'>This model needs a dermatoscopic image.</p></div>")
+        return warn, {}, ""
+
+    tab_np, tab_tensor, img_tensor = prepare_inputs(image_path, age, sex, localization)
+    probs, ms = predict(model_choice, tab_np, tab_tensor, img_tensor)
+    gt_html, true_dx = ground_truth_html(image_path) if image_path else ("", None)
+
     top_idx = int(np.argmax(probs))
-    top_class = CLASS_NAMES[top_idx]
-    top_prob = float(probs[top_idx])
+    top_class, top_prob = CLASS_NAMES[top_idx], float(probs[top_idx])
     info = DISEASE_INFO[top_class]
+    dangerous = "HIGH RISK" in info["risk_tier"] or "CRITICAL" in info["risk_tier"]
+    border = "#ef4444" if dangerous else "#10b981"
+    bg = "#fef2f2" if dangerous else "#f0fdf4"
 
-    # Generate Card Header
-    is_dangerous = "HIGH RISK" in info["risk_tier"] or "CRITICAL" in info["risk_tier"]
-    card_border = "#ef4444" if is_dangerous else "#10b981"
-    card_bg = "#fef2f2" if is_dangerous else "#f0fdf4"
+    verdict = ""
+    if true_dx is not None:
+        ok = true_dx == top_class
+        verdict = (f"<span style='font-weight:700;color:{'#047857' if ok else '#b91c1c'};'>"
+                   f"{'✅ Correct' if ok else '❌ Wrong — true class is ' + true_dx.upper()}</span>")
+    low_conf = ("<p style='margin:8px 0 0 0;color:#b45309;font-weight:600;'>⚠️ Low confidence (&lt; 50%): "
+                "the model is unsure — treat this prediction with caution.</p>") if top_prob < 0.5 else ""
 
-    header_html = f"""
-    <div style="background-color: {card_bg}; border: 2px solid {card_border}; border-radius: 12px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-            <span style="background-color: {info['badge_bg']}; color: {info['badge_color']}; font-weight: 700; font-size: 0.85em; padding: 6px 14px; border-radius: 20px; border: 1px solid {info['badge_color']}40; text-transform: uppercase; letter-spacing: 0.5px;">
-                {info['risk_tier']}
-            </span>
-            <span style="font-size: 0.9em; color: #64748b; font-weight: 500;">
-                Architecture: <strong>{model_choice.split(' [')[0]}</strong>
-            </span>
-        </div>
+    header = f"""
+    <div style="background:{bg};border:2px solid {border};border-radius:12px;padding:20px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <span style="background:{info['badge_bg']};color:{info['badge_color']};font-weight:700;font-size:.85em;
+              padding:6px 14px;border-radius:20px;text-transform:uppercase;">{info['risk_tier']}</span>
+        <span style="font-size:.9em;color:#64748b;">Model: <b>{model_choice}</b> · {ms:.1f} ms</span>
+      </div>
+      <h2 style="margin:12px 0 0 0;color:#0f172a;font-size:1.5em;">{top_class.upper()} — {info['full_name']}</h2>
+      <div style="margin-top:10px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">
+        <span style="font-size:2.1em;font-weight:800;color:{border};">{top_prob*100:.1f}%</span>
+        <span style="color:#64748b;">model probability</span> {verdict}
+      </div>{low_conf}
+    </div>{gt_html}"""
 
-        <div style="margin-top: 12px;">
-            <h2 style="margin: 0; color: #0f172a; font-size: 1.6em; font-weight: 700;">
-                {top_class.upper()} — {info['full_name']}
-            </h2>
-            <p style="margin: 4px 0 0 0; color: #475569; font-size: 1.05em;">
-                Pathological Classification: <strong>{info['category']}</strong>
-            </p>
-        </div>
-
-        <div style="margin-top: 14px; display: flex; align-items: baseline; gap: 10px;">
-            <span style="font-size: 2.2em; font-weight: 800; color: {card_border};">
-                {top_prob * 100:.1f}%
-            </span>
-            <span style="color: #64748b; font-size: 0.95em;">Model Confidence Score</span>
-        </div>
-    </div>
-    """
-
-    clinical_markdown = f"""
-### 🩺 Clinical Action & Interpretation
-* **Diagnostic Summary:** The lesion demonstrates features most consistent with **{info['full_name']}** ({top_prob*100:.1f}% confidence).
-* **Clinical Guidance:** {info['clinical_action']}
-* **Pathological Notes:** {info['description']}
-* **Patient Profile Evaluated:** Age {int(age)}, {sex.capitalize()}, Lesion Location: *{localization.title()}*.
+    prob_dict = {f"{c.upper()} - {DISEASE_INFO[c]['short_name']}": float(p) for c, p in zip(CLASS_NAMES, probs)}
+    notes = f"""
+### 🩺 Interpretation
+* **Most likely:** {info['full_name']} ({top_prob*100:.1f}%). Second choice: **{CLASS_NAMES[int(np.argsort(probs)[-2])].upper()}** ({np.sort(probs)[-2]*100:.1f}%).
+* **Clinical note:** {info['clinical_action']}
+* **About this class:** {info['description']}
+* **Inputs used:** {'image + ' if kind == 'both' else ('image only' if kind == 'image' else '')}{'metadata (age ' + str(int(age)) + ', ' + sex + ', ' + localization + ')' if kind in ('both', 'tabular', 'rf') else ''}.
+* Probabilities come from a model trained with class-weighted loss; they are **not calibrated clinical risks**.
 """
+    return header, prob_dict, notes
 
-    return header_html, prob_dict, clinical_markdown
 
+def run_all_models(image_path, age, sex, localization):
+    if image_path is None:
+        return "<p style='color:#ef4444;font-weight:bold;'>Please upload an image first.</p>", ""
+    tab_np, tab_tensor, img_tensor = prepare_inputs(image_path, age, sex, localization)
+    gt_html, true_dx = ground_truth_html(image_path)
 
-def run_comparative_inference(image, age, sex, localization):
-    """Run all 3 models simultaneously for real-time comparative ablation demonstration."""
-    if image is None:
-        return "<p style='color: #ef4444; font-weight: bold;'>Please upload an image first.</p>", "", ""
+    rows, votes = [], {}
+    for name in MODEL_NAMES:
+        probs, ms = predict(name, tab_np, tab_tensor, img_tensor)
+        top = CLASS_NAMES[int(np.argmax(probs))]
+        votes[top] = votes.get(top, 0) + 1
+        mark = "" if true_dx is None else ("✅" if top == true_dx else "❌")
+        conf = float(np.max(probs))
+        p_true = f"{probs[CLASS_NAMES.index(true_dx)]*100:.1f}%" if true_dx else "—"
+        bar = f"<div style='background:#e2e8f0;border-radius:6px;width:120px;height:10px;display:inline-block;'><div style='background:#0d9488;width:{conf*120:.0f}px;height:10px;border-radius:6px;'></div></div>"
+        rows.append(f"<tr><td style='padding:8px;'><b>{name}</b><br/><span style='color:#64748b;font-size:.85em;'>{MODEL_SPECS[name][3]}</span></td>"
+                    f"<td style='padding:8px;font-weight:700;'>{top.upper()} {mark}</td>"
+                    f"<td style='padding:8px;'>{conf*100:.1f}% {bar}</td>"
+                    f"<td style='padding:8px;'>{p_true}</td><td style='padding:8px;'>{ms:.1f} ms</td></tr>")
 
-    sample_df = pd.DataFrame([{
-        "age": float(age),
-        "sex": str(sex),
-        "localization": str(localization)
-    }])
-    tab_features_np = preprocessor.transform(sample_df)
-    tab_tensor = torch.tensor(tab_features_np, dtype=torch.float32).to(DEVICE)
-
-    pil_img = Image.fromarray(image).convert("RGB")
-    img_tensor = IMAGE_TRANSFORM(pil_img).unsqueeze(0).to(DEVICE)
-
-    with torch.no_grad():
-        # 1. Multimodal
-        mm_logits = multimodal_model(img_tensor, tab_tensor)
-        mm_probs = F.softmax(mm_logits, dim=1).cpu().numpy()[0]
-
-        # 2. ResNet50
-        res_logits = resnet_model(img_tensor)
-        res_probs = F.softmax(res_logits, dim=1).cpu().numpy()[0]
-
-    # 3. Random Forest
-    rf_df = pd.DataFrame(tab_features_np, columns=TABULAR_FEATURE_NAMES)
-    rf_probs = rf_model.predict_proba(rf_df)[0]
-
-    mm_top = CLASS_NAMES[int(np.argmax(mm_probs))]
-    mm_conf = float(np.max(mm_probs))
-
-    res_top = CLASS_NAMES[int(np.argmax(res_probs))]
-    res_conf = float(np.max(res_probs))
-
-    rf_top = CLASS_NAMES[int(np.argmax(rf_probs))]
-    rf_conf = float(np.max(rf_probs))
-
-    comp_html = f"""
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 10px;">
-        <!-- Multimodal Card -->
-        <div style="background: white; border: 2px solid #0d9488; border-radius: 12px; padding: 18px; box-shadow: 0 4px 6px -1px rgba(13, 148, 136, 0.1);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-weight: 700; color: #0d9488; font-size: 0.9em; text-transform: uppercase;">🌟 Proposed Model</span>
-                <span style="background-color: #ccfbf1; color: #0f766e; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 600;">Image + Tabular</span>
-            </div>
-            <h3 style="margin: 10px 0 4px 0; color: #0f172a; font-size: 1.25em;">Multimodal Network</h3>
-            <p style="color: #64748b; font-size: 0.85em; margin: 0 0 12px 0;">ResNet-50 + 2-layer Tabular MLP</p>
-            <div style="font-size: 1.6em; font-weight: 800; color: #0d9488;">{mm_top.upper()} <span style="font-size: 0.65em; font-weight: 600;">({mm_conf*100:.1f}%)</span></div>
-            <p style="margin: 4px 0 0 0; color: #475569; font-size: 0.9em;"><strong>{DISEASE_INFO[mm_top]['short_name']}</strong></p>
-        </div>
-
-        <!-- ResNet50 Card -->
-        <div style="background: white; border: 1px solid #cbd5e1; border-radius: 12px; padding: 18px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-weight: 700; color: #64748b; font-size: 0.9em; text-transform: uppercase;">Image Ablation</span>
-                <span style="background-color: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 600;">Image Only</span>
-            </div>
-            <h3 style="margin: 10px 0 4px 0; color: #0f172a; font-size: 1.25em;">ResNet-50 Fine-tuned</h3>
-            <p style="color: #64748b; font-size: 0.85em; margin: 0 0 12px 0;">No Patient Demographic Context</p>
-            <div style="font-size: 1.6em; font-weight: 800; color: #334155;">{res_top.upper()} <span style="font-size: 0.65em; font-weight: 600;">({res_conf*100:.1f}%)</span></div>
-            <p style="margin: 4px 0 0 0; color: #475569; font-size: 0.9em;"><strong>{DISEASE_INFO[res_top]['short_name']}</strong></p>
-        </div>
-
-        <!-- Tabular RF Card -->
-        <div style="background: white; border: 1px solid #cbd5e1; border-radius: 12px; padding: 18px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-weight: 700; color: #64748b; font-size: 0.9em; text-transform: uppercase;">Tabular Baseline</span>
-                <span style="background-color: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 600;">Tabular Only</span>
-            </div>
-            <h3 style="margin: 10px 0 4px 0; color: #0f172a; font-size: 1.25em;">Tuned Random Forest</h3>
-            <p style="color: #64748b; font-size: 0.85em; margin: 0 0 12px 0;">Age, Sex & Localization Only</p>
-            <div style="font-size: 1.6em; font-weight: 800; color: #334155;">{rf_top.upper()} <span style="font-size: 0.65em; font-weight: 600;">({rf_conf*100:.1f}%)</span></div>
-            <p style="margin: 4px 0 0 0; color: #475569; font-size: 0.9em;"><strong>{DISEASE_INFO[rf_top]['short_name']}</strong></p>
-        </div>
-    </div>
-    """
-
-    # Analysis Commentary
-    if mm_top == res_top:
-        agreement_note = f"✅ **High Concordance:** Both deep learning architectures agree on **{DISEASE_INFO[mm_top]['short_name']}**."
-        if mm_conf > res_conf:
-            agreement_note += f" The multimodal integration boosted diagnostic certainty from **{res_conf*100:.1f}%** to **{mm_conf*100:.1f}%** (+{(mm_conf - res_conf)*100:.1f}%)."
-    else:
-        agreement_note = f"⚠️ **Discrepancy Highlight:** ResNet-50 alone predicted **{res_top.upper()}**, but multimodal fusion adjusted the diagnosis to **{mm_top.upper()}** using the clinical risk priors."
-
-    commentary = f"""
-### 🔬 Ablation Analysis for This Patient:
-* {agreement_note}
-* **Tabular Demographic Prior:** The patient's age ({int(age)}) and lesion site (*{localization}*) give a prior baseline favor towards **{rf_top.upper()}** ({rf_conf*100:.1f}%).
-* **Takeaway:** Multimodal fusion allows the neural network to synthesize visual morphological patterns with clinical epidemiologic priors, exactly mimicking the diagnostic thought process of an expert dermatologist.
-"""
-
-    mm_probs_dict = {f"{c.upper()} ({DISEASE_INFO[c]['short_name']})": float(p) for c, p in zip(CLASS_NAMES, mm_probs)}
-    res_probs_dict = {f"{c.upper()} ({DISEASE_INFO[c]['short_name']})": float(p) for c, p in zip(CLASS_NAMES, res_probs)}
-
-    return comp_html, commentary, mm_probs_dict, res_probs_dict
+    table = ("<table style='width:100%;border-collapse:collapse;font-size:.95em;'>"
+             "<tr style='background:#0f766e;color:white;text-align:left;'><th style='padding:8px;'>Model</th>"
+             "<th style='padding:8px;'>Prediction</th><th style='padding:8px;'>Confidence</th>"
+             "<th style='padding:8px;'>Prob. of true class</th><th style='padding:8px;'>Inference</th></tr>"
+             + "".join(rows) + "</table>")
+    consensus = max(votes, key=votes.get)
+    summary = (f"### 🔬 Summary\n* **Majority vote:** {consensus.upper()} ({votes[consensus]}/{len(MODEL_NAMES)} models).\n"
+               "* Compare **Multimodal** with **Image-only Ablation**: they are identical except for the metadata branch, "
+               "so any difference on this case comes from age / sex / body site.\n"
+               "* Metadata-only models (Random Forest, Tabular NN) are weak on their own (≈0.21–0.23 macro F1) — "
+               "they show the prior from patient context, not the lesion's appearance.")
+    return gt_html + "<div style='height:10px'></div>" + table, summary
 
 
 # =====================================================================
-# 4. CUSTOM STYLING & MODERN THEME
+# 5. STYLING
 # =====================================================================
 CUSTOM_CSS = """
 /* Modern Clean Layout */
@@ -464,283 +468,151 @@ CUSTOM_CSS = """
 }
 """
 
-theme = gr.themes.Soft(
-    primary_hue=gr.themes.colors.teal,
-    secondary_hue=gr.themes.colors.emerald,
-    neutral_hue=gr.themes.colors.slate
-)
+theme = gr.themes.Soft(primary_hue=gr.themes.colors.teal, secondary_hue=gr.themes.colors.emerald,
+                       neutral_hue=gr.themes.colors.slate)
+
+EXAMPLES_DIR = PROJECT_ROOT / "demo" / "examples"
+EXAMPLE_FILES = sorted(EXAMPLES_DIR.glob("*.jpg")) if EXAMPLES_DIR.exists() else []
+
+
+def example_rows(with_model):
+    rows = []
+    for f in EXAMPLE_FILES:
+        row = GROUND_TRUTH.get(find_image_id(f))
+        age = 50 if row is None or pd.isna(row.age) else int(row.age)
+        sex = "unknown" if row is None else row.sex
+        loc = "unknown" if row is None else row.localization
+        rows.append([str(f), age, sex, loc] + ([DEFAULT_MODEL] if with_model else []))
+    return rows
+
+
+PLACEHOLDER = ("<div style='background:#f8fafc;border:2px dashed #cbd5e1;border-radius:12px;padding:36px 20px;"
+               "text-align:center;color:#64748b;'><h3 style='margin:0;'>{t}</h3><p style='margin:6px 0 0 0;'>{s}</p></div>")
 
 
 # =====================================================================
-# 5. GRADIO APPLICATION LAYOUT
+# 6. LAYOUT
 # =====================================================================
 with gr.Blocks(title="DermAI — Multimodal Lesion Diagnosis") as demo:
-
-    # HERO HEADER
-    gr.HTML("""
+    gr.HTML(f"""
     <div class="hero-banner">
         <span class="hero-tag">PHAROS UNIVERSITY IN ALEXANDRIA • FACULTY OF COMPUTER SCIENCE & AI • AI403</span>
-        <div class="hero-title">🔬 DermAI: Multimodal Skin Lesion Diagnosis System</div>
-        <p class="hero-subtitle">
-            Joint Deep Learning Architecture Combining Dermatoscopic Imagery & Patient Clinical Covariates
-        </p>
-        <div style="margin-top: 14px; display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.85em; opacity: 0.95;">
-            <span><strong>Course:</strong> Deep Learning Final Project (Fall 2026)</span>
-            <span>•</span>
-            <span><strong>Supervisor:</strong> Dr. Sahar Ghanem</span>
-            <span>•</span>
+        <div class="hero-title">🔬 DermAI: Multimodal Skin Lesion Diagnosis</div>
+        <p class="hero-subtitle">Dermatoscopic images + patient metadata · HAM10000 · {len(MODELS)} trained models loaded</p>
+        <div style="margin-top:14px;display:flex;gap:12px;flex-wrap:wrap;font-size:.85em;opacity:.95;">
+            <span><strong>Supervisor:</strong> Dr. Sahar Ghanem</span><span>•</span>
             <span><strong>TAs:</strong> Esraa Habiba, Philopater Hany, Mohamed Ashraf</span>
         </div>
-    </div>
-    """)
+    </div>""")
 
     with gr.Tabs():
-
-        # =================================================================
-        # TAB 1: CLINICAL DIAGNOSIS (الكشف السريع)
-        # =================================================================
-        with gr.TabItem("🩺 Clinical Diagnosis (الكشف السريع)"):
+        # ---------------- TAB 1 ----------------
+        with gr.TabItem("🩺 Diagnosis (الكشف)"):
             with gr.Row():
-                # LEFT COLUMN: INPUTS
                 with gr.Column(scale=5):
                     gr.Markdown("### 1️⃣ Patient & Lesion Input")
-
-                    image_input = gr.Image(
-                        label="Dermatoscopic Lesion Image",
-                        type="numpy"
-                    )
-
+                    image_input = gr.Image(label="Dermatoscopic Lesion Image", type="filepath")
                     with gr.Row():
-                        age_input = gr.Slider(
-                            minimum=0,
-                            maximum=100,
-                            value=50,
-                            step=1,
-                            label="Patient Age"
-                        )
-                        sex_input = gr.Dropdown(
-                            choices=SEX_OPTIONS,
-                            value="male",
-                            label="Biological Sex"
-                        )
-
-                    loc_input = gr.Dropdown(
-                        choices=LOCALIZATION_OPTIONS,
-                        value="back",
-                        label="Anatomical Site (Localization)"
-                    )
-
-                    model_select = gr.Radio(
-                        choices=[
-                            "Multimodal (ResNet50 + Tabular MLP) [Recommended]",
-                            "ResNet-50 (Dermatoscopic Image Only)",
-                            "Random Forest (Clinical Tabular Only)"
-                        ],
-                        value="Multimodal (ResNet50 + Tabular MLP) [Recommended]",
-                        label="Active Diagnostic Engine"
-                    )
-
+                        age_input = gr.Slider(0, 100, value=50, step=1, label="Patient Age")
+                        sex_input = gr.Dropdown(SEX_OPTIONS, value="male", label="Biological Sex")
+                    loc_input = gr.Dropdown(LOCALIZATION_OPTIONS, value="back", label="Anatomical Site")
+                    model_select = gr.Radio(MODEL_NAMES, value=DEFAULT_MODEL, label="Model")
                     with gr.Row():
                         clear_btn = gr.Button("🔄 Reset", variant="secondary")
-                        diagnose_btn = gr.Button(
-                            "⚡ Run Deep Learning Diagnosis",
-                            variant="primary",
-                            elem_classes=["primary-btn"]
-                        )
-
-                # RIGHT COLUMN: RESULTS
+                        diagnose_btn = gr.Button("⚡ Run Diagnosis", variant="primary", elem_classes=["primary-btn"])
                 with gr.Column(scale=7):
-                    gr.Markdown("### 2️⃣ Diagnostic Findings & Probability Spectrum")
-
-                    result_header = gr.HTML(
-                        value="""
-                        <div style="background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 36px 20px; text-align: center; color: #64748b;">
-                            <h3 style="margin: 0; font-size: 1.2em; color: #475569;">Diagnostic Pipeline Ready</h3>
-                            <p style="margin: 6px 0 0 0; font-size: 0.95em;">Upload an image or pick a test case below, then click <strong>Run Deep Learning Diagnosis</strong>.</p>
-                        </div>
-                        """
-                    )
-
-                    prob_label = gr.Label(
-                        label="Multiclass Probability Distribution (All 7 Diagnoses)",
-                        num_top_classes=7
-                    )
-
+                    gr.Markdown("### 2️⃣ Result")
+                    result_header = gr.HTML(PLACEHOLDER.format(t="Ready", s="Upload an image or pick an example below."))
+                    prob_label = gr.Label(label="Probabilities (all 7 classes)", num_top_classes=7)
                     clinical_notes = gr.Markdown()
 
-            # BENCHMARK TEST SAMPLES SECTION
-            gr.Markdown("### 💡 Benchmark Test Samples (Click to Instant Test)")
-            gr.Markdown("*Pre-configured holdout test cases from the HAM10000 dataset for rapid demonstration during the viva presentation:*")
+            gr.Markdown("### 💡 Held-out test examples (one per class) — metadata is the real HAM10000 metadata")
+            gr.Examples(examples=example_rows(True), inputs=[image_input, age_input, sex_input, loc_input, model_select])
 
-            examples_dir = PROJECT_ROOT / "demo" / "examples"
-            example_cases = [
-                [str(examples_dir / "mel_ISIC_0030443.jpg"), 85, "female", "lower extremity", "Multimodal (ResNet50 + Tabular MLP) [Recommended]"],
-                [str(examples_dir / "bcc_ISIC_0028155.jpg"), 50, "male", "back", "Multimodal (ResNet50 + Tabular MLP) [Recommended]"],
-                [str(examples_dir / "akiec_ISIC_0029659.jpg"), 70, "female", "face", "Multimodal (ResNet50 + Tabular MLP) [Recommended]"],
-                [str(examples_dir / "nv_ISIC_0028239.jpg"), 45, "female", "lower extremity", "Multimodal (ResNet50 + Tabular MLP) [Recommended]"],
-                [str(examples_dir / "bkl_ISIC_0029176.jpg"), 60, "male", "face", "Multimodal (ResNet50 + Tabular MLP) [Recommended]"],
-                [str(examples_dir / "df_ISIC_0029760.jpg"), 70, "male", "lower extremity", "Multimodal (ResNet50 + Tabular MLP) [Recommended]"],
-                [str(examples_dir / "vasc_ISIC_0028163.jpg"), 25, "female", "abdomen", "Multimodal (ResNet50 + Tabular MLP) [Recommended]"]
-            ]
-
-            gr.Examples(
-                examples=example_cases,
-                inputs=[image_input, age_input, sex_input, loc_input, model_select]
-            )
-
-        # =================================================================
-        # TAB 2: MULTIMODAL COMPARISON (المقارنة الحية بين النماذج)
-        # =================================================================
-        with gr.TabItem("⚖️ Model Comparison & Ablation (المقارنة الحية بين النماذج)"):
-            gr.Markdown("""
-            ### 🔬 Live Multi-Model Comparison (Multimodal vs Image-Only vs Tabular-Only)
-            *Demonstrate to examiners in real time how incorporating patient metadata (Age, Sex, Anatomical Site) refines and changes neural network confidence compared to analyzing image pixels alone.*
-            """)
-
+        # ---------------- TAB 2 ----------------
+        with gr.TabItem("⚖️ All Models (مقارنة كل الموديلات)"):
+            gr.Markdown("### Run every trained model on the same case")
             with gr.Row():
                 with gr.Column(scale=4):
-                    comp_image = gr.Image(label="Patient Lesion Image", type="numpy")
+                    comp_image = gr.Image(label="Lesion Image", type="filepath")
                     with gr.Row():
-                        comp_age = gr.Slider(0, 100, 85, step=1, label="Age")
-                        comp_sex = gr.Dropdown(SEX_OPTIONS, value="female", label="Sex")
-                    comp_loc = gr.Dropdown(LOCALIZATION_OPTIONS, value="lower extremity", label="Site")
-                    compare_btn = gr.Button("⚡ Compare All 3 Models Side-by-Side", variant="primary", elem_classes=["primary-btn"])
-
+                        comp_age = gr.Slider(0, 100, 50, step=1, label="Age")
+                        comp_sex = gr.Dropdown(SEX_OPTIONS, value="male", label="Sex")
+                    comp_loc = gr.Dropdown(LOCALIZATION_OPTIONS, value="back", label="Site")
+                    compare_btn = gr.Button("⚡ Compare All Models", variant="primary", elem_classes=["primary-btn"])
                 with gr.Column(scale=8):
-                    comp_cards = gr.HTML(
-                        value="""
-                        <div style="background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 36px 20px; text-align: center; color: #64748b;">
-                            <h3 style="margin: 0;">Comparative Engine Ready</h3>
-                            <p style="margin: 6px 0 0 0;">Upload an image or pick the default Melanoma case and click <strong>Compare All 3 Models Side-by-Side</strong>.</p>
-                        </div>
-                        """
-                    )
-                    comp_commentary = gr.Markdown()
+                    comp_table = gr.HTML(PLACEHOLDER.format(t="Ready", s="Pick an example and click Compare."))
+                    comp_summary = gr.Markdown()
+            gr.Examples(examples=example_rows(False), inputs=[comp_image, comp_age, comp_sex, comp_loc])
 
-                    with gr.Row():
-                        comp_mm_prob = gr.Label(label="Multimodal Probability Distribution", num_top_classes=4)
-                        comp_res_prob = gr.Label(label="ResNet-50 (Image Only) Distribution", num_top_classes=4)
-
-            # Auto-link example for comparison tab
-            gr.Examples(
-                examples=[
-                    [str(examples_dir / "mel_ISIC_0030443.jpg"), 85, "female", "lower extremity"],
-                    [str(examples_dir / "bcc_ISIC_0028155.jpg"), 50, "male", "back"],
-                    [str(examples_dir / "nv_ISIC_0028239.jpg"), 45, "female", "lower extremity"]
-                ],
-                inputs=[comp_image, comp_age, comp_sex, comp_loc]
-            )
-
-        # =================================================================
-        # TAB 3: BENCHMARK RESULTS (لوحة الأداء والنتائج)
-        # =================================================================
-        with gr.TabItem("📊 Benchmark Performance & Results (الأرقام والنتائج الرسمية)"):
-            gr.Markdown("### 🏆 Comprehensive Benchmark Performance on HAM10000 Test Set")
-
-            # High-level Metrics Cards
+        # ---------------- TAB 3 ----------------
+        with gr.TabItem("📊 Results (النتايج)"):
             gr.HTML("""
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
-                <div class="metric-box">
-                    <p class="metric-val">81.42%</p>
-                    <p class="metric-label">Test Set Accuracy</p>
-                </div>
-                <div class="metric-box">
-                    <p class="metric-val">71.63%</p>
-                    <p class="metric-label">Macro F1-Score</p>
-                </div>
-                <div class="metric-box">
-                    <p class="metric-val">74.07%</p>
-                    <p class="metric-label">Balanced Accuracy</p>
-                </div>
-                <div class="metric-box">
-                    <p class="metric-val">1,502</p>
-                    <p class="metric-label">Holdout Test Samples</p>
-                </div>
-            </div>
-            """)
-
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
+              <div class="metric-box"><p class="metric-val">0.716</p><p class="metric-label">Multimodal test macro F1</p></div>
+              <div class="metric-box"><p class="metric-val">74.1%</p><p class="metric-label">Multimodal test balanced acc.</p></div>
+              <div class="metric-box"><p class="metric-val">81.4%</p><p class="metric-label">Multimodal test accuracy</p></div>
+              <div class="metric-box"><p class="metric-val">1,502</p><p class="metric-label">Held-out test images</p></div>
+            </div>""")
             gr.Markdown("""
-            #### 📋 Model Architecture & Ablation Comparison Table (Table 4 in Project Report)
-            | Model Architecture | Input Modalities | Validation Macro F1 | Test Macro F1 | Test Accuracy | Balanced Accuracy | Key Observation |
-            | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
-            | **Tuned Random Forest (Baseline)** | Tabular Only (19 features) | 20.82% | — | 40.21% | 29.50% | Weak alone; heavily biased towards majority class `nv`. |
-            | **Tabular MLP (Ablation)** | Tabular Only (Dense MLP) | 22.71% | — | 64.16% | 23.28% | Neural baseline on demographics alone. |
-            | **ResNet-50 (Image Only)** | Image Only (224×224 RGB) | 70.14% | — | 83.03% | ~70.0% | Strong visual representations; occasionally confuses `mel` and `nv`. |
-            | **Multimodal Proposed (Full Model)** | **Image + Clinical Tabular** | **72.65%** | **71.63%** | **81.42%** | **74.07%** | **Best overall balanced performance (+1.8% F1 over image-only).** |
+#### Model comparison (single seed 42). **Val** = validation split, **Test** = held-out test split.
+| Model | Inputs | Val macro F1 | Val balanced acc. | Val accuracy | Test macro F1 |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| Random Forest (baseline) | Metadata | 0.208 | 0.295 | 0.402 | — |
+| Tabular-only NN (ablation) | Metadata | 0.227 | 0.233 | 0.642 | — |
+| ResNet-50 from scratch | Image | 0.456 | — | 0.659 | — |
+| ResNet-50 pretrained | Image | 0.701 | — | 0.830 | — |
+| Image-only ablation (same protocol as multimodal) | Image | see report | — | — | — |
+| ViT-B/16 pretrained | Image | **0.749** | 0.711 | **0.856** | — |
+| **Multimodal (ours)** | Image + metadata | 0.727 | **0.742** | 0.838 | **0.716** |
 
-            ---
+Only the final multimodal model was evaluated on the test set, to keep the holdout untouched.
 
-            #### 🔍 Error Analysis & Clinical Findings
-            1. **Melanoma (`mel`) vs. Common Nevus (`nv`):** The primary diagnostic challenge in clinical dermatology. Nevi account for ~67% of all cases in HAM10000. In holdout evaluation, adding patient age and anatomical location significantly reduced false negatives for elderly patients with lesions on the lower extremities and back.
-            2. **Minority Classes (`vasc`, `df`):** Vascular lesions (`vasc`) and dermatofibroma (`df`) represent less than 3% of the dataset each. Using class-weighted cross-entropy loss enabled the multimodal model to achieve **90.5% recall on vascular lesions** and **80.0% recall on dermatofibromas**.
-            """)
+#### Main failure modes (test set, multimodal)
+1. **Melanoma → Nevus:** 49 of 167 melanomas (29%) were predicted as benign nevi — the most dangerous error.
+2. **Nevus → Melanoma:** 45 nevi (4.5%) were flagged as melanoma (atypical nevi).
+3. **Benign keratosis:** highest error rate (43%) — one label covers three lesion types.
+4. **Rare classes:** vascular lesions (90% recall) and dermatofibroma (80% recall) are recognised well thanks to class-weighted loss.
+""")
 
-        # =================================================================
-        # TAB 4: ABOUT & TEAM (عن المشروع والفريق)
-        # =================================================================
-        with gr.TabItem("📖 About & Academic Credits (عن المشروع)"):
-            gr.Markdown("""
-            ### 🎓 Academic Information
-            * **Institution:** Pharos University in Alexandria (PUA)
-            * **Faculty:** Faculty of Computer Science & Artificial Intelligence
-            * **Department:** Artificial Intelligence Department
-            * **Course:** Deep Learning (AI403) — Fall 2026 Semester
-            * **Course Instructor:** Dr. Sahar Ghanem
-            * **Teaching Assistants:** Eng. Esraa Habiba, Eng. Philopater Hany, Eng. Mohamed Ashraf
+        # ---------------- TAB 4 ----------------
+        with gr.TabItem("📖 About"):
+            gr.Markdown(f"""
+### 🎓 Academic Information
+* **Institution:** Pharos University in Alexandria — Faculty of Computer Science & AI
+* **Course:** Deep Learning (AI403), Fall 2026 · **Instructor:** Dr. Sahar Ghanem
+* **TAs:** Eng. Esraa Habiba, Eng. Philopater Hany, Eng. Mohamed Ashraf
 
-            ---
+### 📂 Data & Models
+* **Dataset:** HAM10000 (Tschandl, Rosendahl & Kittler, 2018), CC BY-NC 4.0.
+* **Split:** lesion_id-grouped, stratified 70/15/15 — no lesion appears in two splits.
+* **Loaded models ({len(MODELS)}):** {", ".join(MODEL_NAMES)}
+* **Device:** {DEVICE}
+""")
 
-            ### 📂 Dataset & Methodology Citations
-            * **Benchmark Dataset:** HAM10000 ("Human Against Machine with 10000 training images").
-            * **Authors:** Philipp Tschandl, Cliff Rosendahl, Harald Kittler (ViDIR Group, Medical University of Vienna).
-            * **Data Split Strategy:** Lesion-level Stratified Partitioning (`lesion_id` grouping) with zero patient-level data leakage between train (70%), validation (15%), and holdout test (15%).
-            * **License & Ethics:** CC BY-NC 4.0. Used exclusively for educational and non-commercial scientific research.
-            """)
-
-    # DISCLAIMER BOX AT THE BOTTOM
     gr.HTML("""
-    <div class="disclaimer-card">
-        <strong>⚠️ Clinical & Academic Advisory Notice:</strong><br/>
-        This artificial intelligence software system is developed as an academic senior project for educational, benchmarking, and research evaluation purposes. It does NOT provide a certified clinical diagnosis. Any suspect pigmented skin lesion must be evaluated by a board-certified dermatologist with dermatoscopy and histopathological biopsy.
-    </div>
-    """)
+    <div class="disclaimer-card"><strong>⚠️ Academic prototype — not a medical device.</strong><br/>
+    This system was built for a university course. It does not provide a clinical diagnosis. Any suspicious
+    lesion must be examined by a dermatologist. Photos taken with a phone (not a dermatoscope) are outside the
+    training distribution and will give unreliable results.</div>""")
 
-    # =================================================================
-    # 6. EVENT BINDINGS
-    # =================================================================
-    diagnose_btn.click(
-        fn=run_single_inference,
-        inputs=[image_input, age_input, sex_input, loc_input, model_select],
-        outputs=[result_header, prob_label, clinical_notes]
-    )
+    # ---------------- EVENTS ----------------
+    image_input.change(autofill_metadata, inputs=[image_input],
+                       outputs=[age_input, sex_input, loc_input, result_header])
+    comp_image.change(autofill_metadata, inputs=[comp_image],
+                      outputs=[comp_age, comp_sex, comp_loc, comp_table])
+    diagnose_btn.click(run_single_inference, inputs=[image_input, age_input, sex_input, loc_input, model_select],
+                       outputs=[result_header, prob_label, clinical_notes])
+    compare_btn.click(run_all_models, inputs=[comp_image, comp_age, comp_sex, comp_loc],
+                      outputs=[comp_table, comp_summary])
 
     def reset_inputs():
-        default_header = """
-        <div style="background-color: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 36px 20px; text-align: center; color: #64748b;">
-            <h3 style="margin: 0; font-size: 1.2em; color: #475569;">Diagnostic Pipeline Ready</h3>
-            <p style="margin: 6px 0 0 0; font-size: 0.95em;">Upload an image or pick a test case below, then click <strong>Run Deep Learning Diagnosis</strong>.</p>
-        </div>
-        """
-        return None, 50, "male", "back", "Multimodal (ResNet50 + Tabular MLP) [Recommended]", default_header, {}, ""
+        return (None, 50, "male", "back", DEFAULT_MODEL,
+                PLACEHOLDER.format(t="Ready", s="Upload an image or pick an example below."), {}, "")
 
-    clear_btn.click(
-        fn=reset_inputs,
-        inputs=[],
-        outputs=[image_input, age_input, sex_input, loc_input, model_select, result_header, prob_label, clinical_notes]
-    )
-
-    compare_btn.click(
-        fn=run_comparative_inference,
-        inputs=[comp_image, comp_age, comp_sex, comp_loc],
-        outputs=[comp_cards, comp_commentary, comp_mm_prob, comp_res_prob]
-    )
+    clear_btn.click(reset_inputs, inputs=[], outputs=[image_input, age_input, sex_input, loc_input,
+                                                      model_select, result_header, prob_label, clinical_notes])
 
 
 if __name__ == "__main__":
-    demo.launch(
-        server_name="127.0.0.1",
-        server_port=7860,
-        theme=theme,
-        css=CUSTOM_CSS,
-        share=False
-    )
+    demo.launch(server_name="127.0.0.1", server_port=7860, theme=theme, css=CUSTOM_CSS, share=False)
